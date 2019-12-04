@@ -1,9 +1,11 @@
-import hashlib
 import json
+from hashlib import blake2b
 from time import time
 from uuid import uuid4
-
 from flask import Flask, jsonify, request
+
+SECRET_KEY = b'super secret key'
+AUTH_SIZE = 32
 
 
 class Blockchain(object):
@@ -29,66 +31,44 @@ class Blockchain(object):
         :param previous_hash: (Optional) <str> Hash of previous Block
         :return: <dict> New Block
         """
+        if not self.chain or self.valid_proof(json.dumps(self.last_block), proof):
+            block = {
+                'index': len(self.chain),
+                'prev_hash': previous_hash,
+                'proof': proof,
+                'timestamp': time(),
+                'transactions': self.current_transactions,
+            }
 
-        block = {
-            # TODO
-        }
+            # Reset the current list of transactions
+            self.current_transactions = []
+            # Append the chain to the block
+            self.chain.append(block)
+            # Return the new block
+            return block
+        print('Invalid proof.')
 
-        # Reset the current list of transactions
-        # Append the chain to the block
-        # Return the new block
-        pass
-
-    def hash(block):
+    def hash(self, block_string):
         """
         Creates a SHA-256 hash of a Block
 
-        :param block": <dict> Block
+        :param block_string": <dict> json string of Block
         "return": <str>
         """
-
-        # Use json.dumps to convert json into a string
-        # Use hashlib.sha256 to create a hash
-        # It requires a `bytes-like` object, which is what
-        # .encode() does.
-        # It convertes the string to bytes.
-        # We must make sure that the Dictionary is Ordered,
-        # or we'll have inconsistent hashes
-
-        # TODO: Create the block_string
-
-        # TODO: Hash this string using sha256
-
-        # By itself, the sha256 function returns the hash in a raw string
-        # that will likely include escaped characters.
-        # This can be hard to read, but .hexdigest() converts the
-        # hash to a string of hexadecimal characters, which is
-        # easier to work with and understand
-
-        # TODO: Return the hashed block string in hexadecimal format
-        pass
+        hasher = blake2b(key=SECRET_KEY, digest_size=AUTH_SIZE)
+        hasher.update(block_string.encode('utf8'))
+        hash = hasher.hexdigest()
+        return hash
 
     @property
     def last_block(self):
         return self.chain[-1]
 
-    def proof_of_work(self, block):
-        """
-        Simple Proof of Work Algorithm
-        Stringify the block and look for a proof.
-        Loop through possibilities, checking each one against `valid_proof`
-        in an effort to find a number that is a valid proof
-        :return: A valid proof for the provided block
-        """
-        # TODO
-        pass
-        # return proof
-
-    @staticmethod
-    def valid_proof(block_string, proof):
+    def valid_proof(self, block_string, proof):
         """
         Validates the Proof:  Does hash(block_string, proof) contain 3
-        leading zeroes?  Return true if the proof is valid
+        leading zeroes?  Return true if the proof is valid.
+
         :param block_string: <string> The stringified block to use to
         check in combination with `proof`
         :param proof: <int?> The value that when combined with the
@@ -96,9 +76,27 @@ class Blockchain(object):
         correct number of leading zeroes.
         :return: True if the resulting hash is a valid proof, False otherwise
         """
-        # TODO
-        pass
-        # return True or False
+        proof_string = block_string + str(proof)
+        n = 5
+        if self.hash(proof_string)[:n] == '0' * n:
+            return True
+        return False
+
+    def new_transaction(self, sender, recipient, amount):
+        """Create a new transaction to add to the next block.
+
+        :param sender: <str> Address of the Sender
+        :param recipient: <str> Address of the Recipient
+        :param amount: <int> Amount
+        :return: <int> The index of the `block` that will hold this transaction
+        """
+        transaction = {
+            'amount': amount,
+            'recipient': recipient,
+            'sender': sender,
+        }
+        self.current_transactions.append(transaction)
+        return len(self.chain)
 
 
 # Instantiate our Node
@@ -109,25 +107,92 @@ node_identifier = str(uuid4()).replace('-', '')
 
 # Instantiate the Blockchain
 blockchain = Blockchain()
+print(blockchain.last_block)
 
 
-@app.route('/mine', methods=['GET'])
+@app.route('/mine', methods=['POST'])
 def mine():
-    # Run the proof of work algorithm to get the next proof
+    """Validate proof sent by client."""
+    data = request.get_json()
+    if 'proof' in data:
+        proposed_proof = data['proof']
+    else:
+        response = {
+            'message:': "Must submit proof."
+        }
+        return jsonify(response), 400
 
-    # Forge the new Block by adding it to the chain with the proof
+    if 'id' in data:
+        user_id = data['id']
+    else:
+        response = {
+            'message:': "Must submit user_id"
+        }
+        return jsonify(response), 400
 
-    response = {
-        # TODO: Send a JSON response with the new block
-    }
+    block = blockchain.last_block
+    block_string = json.dumps(block)
 
+    if blockchain.valid_proof(block_string, proposed_proof):
+        blockchain.new_transaction(0, user_id, 1)
+        blockchain.new_block(proof=proposed_proof, previous_hash=blockchain.hash(block_string))
+        response = {
+            'message': "New Block Forged"
+        }
+    else:
+        response = {
+            'message': "Sorry, your proof is not valid."
+        }
     return jsonify(response), 200
 
 
 @app.route('/chain', methods=['GET'])
 def full_chain():
+    """Return the chain and its current length"""
     response = {
-        # TODO: Return the chain and its current length
+        'chain_length': len(blockchain.chain),
+        'chain': {f"block_{x}": block for x, block in enumerate(blockchain.chain)}
+    }
+    return jsonify(response), 200
+
+
+@app.route('/transactions/new', methods=['POST'])
+def new_transaction():
+    data = request.get_json()
+    if 'amount' in data:
+        amount = data['amount']
+    else:
+        response = {
+            'message': 'Include ammount'
+        }
+        return jsonify(response)
+    if 'recipient' in data:
+        recipient = data['recipient']
+    else:
+        response = {
+            'message': 'Include recipient id.'
+        }
+        return jsonify(response)
+    if 'sender' in data:
+        sender = data['sender']
+    else:
+        response = {
+            'message': "Include sender id."
+        }
+        return jsonify(response)
+
+    blockchain.new_transaction(amount=amount, sender=sender, recipient=recipient)
+    response = {
+        'message': f'Index of transaction: {len(blockchain.chain)}'
+    }
+    return jsonify(response)
+
+
+@app.route('/last_block', methods=['GET'])
+def last_block():
+    """Return the last block of the blockchain."""
+    response = {
+        'last_block': blockchain.last_block
     }
     return jsonify(response), 200
 
