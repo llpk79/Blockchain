@@ -1,11 +1,14 @@
 import json
+import os
+import random
+from flask import Flask, jsonify, request
 from hashlib import blake2b
 from time import time
 from uuid import uuid4
-from flask import Flask, jsonify, request
 
-SECRET_KEY = b'super secret key'
+SECRET_KEY = os.environ.get('SECRET_KEY') or b'super secret key'
 AUTH_SIZE = 32
+NUM_ZEROS = 5
 
 
 class Blockchain(object):
@@ -31,13 +34,13 @@ class Blockchain(object):
         :param previous_hash: (Optional) <str> Hash of previous Block
         :return: <dict> New Block
         """
-        if not self.chain or self.valid_proof(json.dumps(self.last_block), proof):
+        if not self.chain or self.valid_proof(json.dumps(self.last_block, sort_keys=True), proof):
             block = {
-                'index': len(self.chain),
+                'index': len(self.chain) + 1,
                 'prev_hash': previous_hash,
                 'proof': proof,
-                'timestamp': time(),
                 'transactions': self.current_transactions,
+                'timestamp': time(),
             }
 
             # Reset the current list of transactions
@@ -52,13 +55,13 @@ class Blockchain(object):
         """
         Creates a SHA-256 hash of a Block
 
-        :param block_string": <dict> json string of Block
+        :param block_string: <str> json string of Block
         "return": <str>
         """
         hasher = blake2b(key=SECRET_KEY, digest_size=AUTH_SIZE)
         hasher.update(block_string.encode('utf8'))
-        hash = hasher.hexdigest()
-        return hash
+        hash_ = hasher.hexdigest()
+        return hash_
 
     @property
     def last_block(self):
@@ -77,23 +80,25 @@ class Blockchain(object):
         :return: True if the resulting hash is a valid proof, False otherwise
         """
         proof_string = block_string + str(proof)
-        n = 5
-        if self.hash(proof_string)[:n] == '0' * n:
+        string = self.hash(proof_string)
+        if string[:NUM_ZEROS] == '0' * NUM_ZEROS:
             return True
         return False
 
-    def new_transaction(self, sender, recipient, amount):
+    def new_transaction(self, sender, recipient, amount, timestamp):
         """Create a new transaction to add to the next block.
 
         :param sender: <str> Address of the Sender
         :param recipient: <str> Address of the Recipient
         :param amount: <int> Amount
+        :param timestamp: <float> timestamp
         :return: <int> The index of the `block` that will hold this transaction
         """
         transaction = {
             'amount': amount,
             'recipient': recipient,
             'sender': sender,
+            'timestamp': timestamp
         }
         self.current_transactions.append(transaction)
         return len(self.chain)
@@ -107,7 +112,6 @@ node_identifier = str(uuid4()).replace('-', '')
 
 # Instantiate the Blockchain
 blockchain = Blockchain()
-print(blockchain.last_block)
 
 
 @app.route('/mine', methods=['POST'])
@@ -131,10 +135,10 @@ def mine():
         return jsonify(response), 400
 
     block = blockchain.last_block
-    block_string = json.dumps(block)
-
+    block_string = json.dumps(block, sort_keys=True)
+    time_stamp = time()
     if blockchain.valid_proof(block_string, proposed_proof):
-        blockchain.new_transaction(0, user_id, 1)
+        blockchain.new_transaction(user_id, user_id, random.uniform(1, 5), time_stamp)
         blockchain.new_block(proof=proposed_proof, previous_hash=blockchain.hash(block_string))
         response = {
             'message': "New Block Forged"
@@ -151,7 +155,7 @@ def full_chain():
     """Return the chain and its current length"""
     response = {
         'chain_length': len(blockchain.chain),
-        'chain': {f"block_{x}": block for x, block in enumerate(blockchain.chain)}
+        'chain': {f"block_{x + 1}": block for x, block in enumerate(blockchain.chain)}
     }
     return jsonify(response), 200
 
@@ -163,7 +167,7 @@ def new_transaction():
         amount = data['amount']
     else:
         response = {
-            'message': 'Include ammount'
+            'message': 'Include amount'
         }
         return jsonify(response)
     if 'recipient' in data:
@@ -180,10 +184,10 @@ def new_transaction():
             'message': "Include sender id."
         }
         return jsonify(response)
-
-    blockchain.new_transaction(amount=amount, sender=sender, recipient=recipient)
+    timestamp = time()
+    blockchain.new_transaction(amount=amount, sender=sender, recipient=recipient, timestamp=timestamp)
     response = {
-        'message': f'Index of transaction: {len(blockchain.chain)}'
+        'message': f'Index of transaction: {len(blockchain.chain) + 1}'
     }
     return jsonify(response)
 
@@ -193,6 +197,15 @@ def last_block():
     """Return the last block of the blockchain."""
     response = {
         'last_block': blockchain.last_block
+    }
+    return jsonify(response), 200
+
+
+@app.route('/zeros', methods=['GET'])
+def zeros():
+    """Return number of leading zeros blockchain is using."""
+    response = {
+        'zeros': NUM_ZEROS
     }
     return jsonify(response), 200
 
