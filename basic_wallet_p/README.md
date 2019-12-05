@@ -6,9 +6,9 @@ Build a simple wallet app using the front-end technology of your choice.  You wi
 on the aesthetics of your app.
 
 This app should:
-   - [ ] Allow the user to enter, save, or change the `id` used for the program
-   - [ ] Display the current balance for that user
-   - [ ] Display a list of all transactions for this user, including sender and recipient
+   - [x] Allow the user to enter, save, or change the `id` used for the program
+   - [x] Display the current balance for that user
+   - [x] Display a list of all transactions for this user, including sender and recipient
 
 Stretch Goals:
    - [ ] Use styling to visually distinguish coins sent and coins received

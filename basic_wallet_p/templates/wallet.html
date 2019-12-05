@@ -1,10 +1,16 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Title</title>
-</head>
-<body>
+{% extends "base.html" %}
 
-</body>
-</html>
+{% block content %}
+    <h2>Username: {{ user }}</h2>
+    <h3>Balance:</h3>
+      {{ balance }}
+    <h3>Transactions:</h3>
+    <hr>
+    {% for transaction in transactions %}
+    <div><p>Timestamp: {{transaction.timestamp}}</p></div>
+    <div><p>Sender: {{transaction.sender if transaction.sender != 0 else 'Mined'}}</p></div>
+    <div><p>Recipient: {{transaction.recipient}}</p></div>
+    <div><p>Amount: {{transaction.amount}}</p></div>
+    <hr>
+    {% endfor %}
+{% endblock %}
