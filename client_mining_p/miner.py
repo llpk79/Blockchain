@@ -3,19 +3,28 @@ import os
 import random
 import requests
 import sys
+sys.path.append('../')
+from settings import settings
 from hashlib import blake2b
 from multiprocessing import Pool, cpu_count
 from timeit import default_timer
 from uuid import uuid4
 
-SECRET_KEY = os.environ.get('SECRET_KEY') or b'super secret key'
-AUTH_SIZE = 32
-URL = "http://localhost:5000"
+SECRET_KEY = os.getenv('SECRET_KEY').encode()
+AUTH_SIZE = int(os.getenv('AUTH_SIZE'))
+URL = os.getenv('URL')
+NUM_ZEROS = int(os.environ.get('NUM_ZEROS'))
 PROCESSES = cpu_count()
-r = requests.get(url=URL + '/zeros')
-NUM_ZEROS = r.json()['zeros']
+
 print('\ncpu_count:', PROCESSES)
-print(f'Zero difficulty: {NUM_ZEROS}')
+print(f'Hash difficulty: {NUM_ZEROS}')
+
+
+def _hash(proof_string):
+    hasher = blake2b(key=SECRET_KEY, digest_size=AUTH_SIZE)
+    hasher.update(proof_string.encode('utf8'))
+    hash_ = hasher.hexdigest()
+    return hash_
 
 
 def valid_proof(block_string, proof):
@@ -31,31 +40,27 @@ def valid_proof(block_string, proof):
     :return: True if the resulting hash is a valid proof, False otherwise
     """
     proof_string = block_string + str(proof)
-    hasher = blake2b(key=SECRET_KEY, digest_size=AUTH_SIZE)
-    hasher.update(proof_string.encode('utf8'))
-    hash_ = hasher.hexdigest()
-    if hash_[:NUM_ZEROS] == '0' * NUM_ZEROS:
+    if _hash(proof_string)[:NUM_ZEROS] == '0' * NUM_ZEROS:
         return True
     return False
 
 
 def get_data():
-    r = requests.get(url=node + "/last_block")
-    # Handle non-json response
+    req = requests.get(url=URL + "/last_block")
     try:
-        data = r.json()
+        data = req.json()
     except ValueError:
         print("Error:  Non-json response")
         print("Response returned:")
-        print(r)
+        print(req)
         return
     return data
 
 
 def do_a_transaction():
-    requests.post(url=node + '/transactions/new', json={'amount': random.randint(0, 100),
-                                                        'sender': random.randint(0, 100),
-                                                        'recipient': random.randint(0, 100)})
+    requests.post(url=URL + '/transactions/new', json={'amount': random.randint(0, 100),
+                                                       'sender': random.randint(0, 100),
+                                                       'recipient': random.randint(0, 100)})
 
 
 def status_update(x, dash, status):
@@ -86,10 +91,10 @@ def final_status(coins_mined, guess_rates, total_time):
 
 def get_node():
     if len(sys.argv) > 1:
-        node = sys.argv[1]
+        url = sys.argv[1]
     else:
-        node = URL
-    return node
+        url = URL
+    return url
 
 
 def get_id():
@@ -121,7 +126,7 @@ if __name__ == '__main__':
     # What is the server address? IE `python3 miner.py https://server.com/api/`
     try:
         with Pool() as pool:
-            node = get_node()
+            url = get_node()
             id_ = get_id()
 
             coins_mined, total_time = 0, 0
@@ -149,8 +154,8 @@ if __name__ == '__main__':
 
                 # When found, POST it to the server {"proof": new_proof, "id": id}
                 post = {"proof": new_proof_[0], "id": id_}
-                r = requests.post(url=node + "/mine", json=post)
-                data = r.json()
+                req = requests.post(url=url + "/mine", json=post)
+                data = req.json()
 
                 # If the server responds with a 'message' 'New Block Forged'
                 # add 1 to the number of coins mined and print it.  Otherwise,
