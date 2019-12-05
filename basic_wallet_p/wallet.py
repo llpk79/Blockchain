@@ -5,6 +5,8 @@ from flask import request, render_template, redirect, url_for
 # noinspection PyUnresolvedReferences
 from forms import LoginForm
 
+URL = "http://localhost:5000"
+
 
 @app.route('/')
 @app.route('/login', methods=['GET', 'POST'])
@@ -14,8 +16,7 @@ def login():
     if form.validate_on_submit():
         # noinspection PyProtectedMember
         user = form.username._value()
-        node = "http://localhost:5000"
-        chain = requests.get(url=node + '/chain')
+        chain = requests.get(url=URL + '/chain')
         chain = chain.json()['chain']
 
         for block in chain.values():
@@ -44,9 +45,8 @@ def balance():
     data = json.loads(data)
     user = data['user']
 
-    node = "http://localhost:5000"
-    r = requests.get(url=node + '/chain')
-    chain = r.json()['chain']
+    req = requests.get(url=URL + '/chain')
+    chain = req.json()['chain']
     bal = 0
     transactions = []
 
