@@ -5,10 +5,13 @@ from flask import Flask, jsonify, request
 from hashlib import blake2b
 from time import time
 from uuid import uuid4
+from settings import settings
 
-SECRET_KEY = os.environ.get('SECRET_KEY') or b'super secret key'
-AUTH_SIZE = 32
-NUM_ZEROS = 5
+SECRET_KEY = os.getenv('SECRET_KEY').encode()
+HOST = os.getenv('HOST')
+PORT = int(os.getenv('PORT'))
+AUTH_SIZE = int(os.getenv('AUTH_SIZE'))
+NUM_ZEROS = int(os.getenv('NUM_ZEROS'))
 
 
 class Blockchain(object):
@@ -212,4 +215,4 @@ def zeros():
 
 # Run the program on port 5000
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host=HOST, port=PORT, load_dotenv=True)
