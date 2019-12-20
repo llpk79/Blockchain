@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+    <head>
+      {% if title %}
+      <title>{{ title }} - PKoin Wallet</title>
+      {% else %}
+      <title>Welcome to PKoin Wallet</title>
+      {% endif %}
+    <div>
+        <a href="/login">Login</a>
+    </div>
+
+    </head>
+    <body>
+        <div><h1>Welcome to PKoin Wallet</h1></p></div>
+        <hr>
+        {% block content %}{% endblock %}
+    </body>
+</html>
